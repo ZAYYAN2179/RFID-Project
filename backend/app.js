@@ -37,7 +37,7 @@ io.on("connection", (socket) => {
 });
 
 const port = new SerialPort({
-  path: "COM3",
+  path: "COM6",
   baudRate: 115200,
 });
 
@@ -52,7 +52,7 @@ async function loadUsers() {
     const snapshot = await db.collection("users").get();
     snapshot.forEach((doc) => {
       const data = doc.data();
-      userCache.set(data.epc, data.nama);
+      userCache.set(data.Tag, data.nama);
     });
     console.log(`✅ Cache ${userCache.size} user berhasil dimuat`);
   } catch (err) {
@@ -81,7 +81,7 @@ port.on("data", async function (data) {
       console.log(tag, "=>", nama);
 
       io.emit("tag", {
-        epc: tag,
+        Tag: tag,
         nama: nama,
         waktu: new Date().toLocaleTimeString(),
       });

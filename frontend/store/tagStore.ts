@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 interface TagData {
-  epc: string;
+  Tag: string;
   nama: string;
   waktu: string;
 }

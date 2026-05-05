@@ -60,7 +60,7 @@ export default function Monitor() {
               <div key={index} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
                 <div>
                   <p className="font-semibold text-white">{tag.nama}</p>
-                  <p className="text-xs text-gray-500 mt-1 font-mono">{tag.epc}</p>
+                  <p className="text-xs text-gray-500 mt-1 font-mono">{tag.Tag}</p>
                 </div>
                 <span className="text-xs text-gray-400 bg-gray-800 px-3 py-1 rounded-full">{tag.waktu}</span>
               </div>
