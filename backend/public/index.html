@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>UHF Monitor</title>
+</head>
+<body>
+    <h2>Data Scan RFID</h2>
+    <ul id="list"></ul>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const list = document.getElementById('list');
+
+        socket.on('tag', function(data) {
+            const li = document.createElement('li');
+
+            li.textContent = `${data.nama} (${data.epc}) - ${data.waktu}`;
+
+            list.prepend(li);
+        });
+    </script>
+</body>
+</html>
