@@ -1,7 +1,6 @@
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
-const { SerialPort } = require("serialport");
 const admin = require("firebase-admin");
 
 const serviceAccount = require("./serviceAccountKey.json");
@@ -18,7 +17,8 @@ const server = http.createServer(app);
 // Middleware
 app.use(express.json());
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "http://localhost:3001");
+  // Buka CORS untuk semua — frontend (localhost:3001) & ESP32
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.sendStatus(200);
@@ -27,7 +27,7 @@ app.use((req, res, next) => {
 
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3001",
+    origin: "*",
     methods: ["GET", "POST"],
   },
 });
@@ -46,12 +46,7 @@ io.on("connection", (socket) => {
   });
 });
 
-const port = new SerialPort({
-  path: "COM3",
-  baudRate: 115200,
-});
-
-let buffer = "";
+// Tag yang sudah dikirim ESP32 (reset lewat socket event)
 const tagTerdeteksi = new Set();
 
 // ✅ Cache users di memory — Firestore hanya dibaca SEKALI
@@ -71,39 +66,43 @@ async function loadUsers() {
 }
 
 function getUserName(tag) {
-  return userCache.get(tag) || "Tidak dikenal"; // tidak perlu async lagi
+  return userCache.get(tag) || "Tidak dikenal";
 }
-
-port.on("data", async function (data) {
-  buffer += data.toString("hex").toUpperCase();
-
-  const tags = buffer.match(/E280[0-9A-F]{20}/g);
-
-  if (tags) {
-    for (const tag of tags) {
-      if (tagTerdeteksi.has(tag)) continue;
-
-      const nama = getUserName(tag); // langsung dari memory
-      if (nama === "Tidak dikenal") continue;
-
-      tagTerdeteksi.add(tag);
-
-      console.log(tag, "=>", nama);
-
-      io.emit("tag", {
-        Tag: tag,
-        nama: nama,
-        waktu: new Date().toLocaleTimeString(),
-      });
-    }
-  }
-
-  buffer = buffer.slice(-200);
-});
 
 app.use(express.static("public"));
 
 // ─── REST API ─────────────────────────────────────────────
+
+// POST /api/scan — terima EPC dari ESP32 via HTTP, lalu emit ke frontend
+app.post("/api/scan", (req, res) => {
+  const { Tag } = req.body;
+  if (!Tag) return res.status(400).json({ error: "Tag wajib diisi" });
+
+  const epc = Tag.trim().toUpperCase();
+
+  // Cegah duplikat dalam satu sesi scan
+  if (tagTerdeteksi.has(epc)) {
+    return res.json({ status: "duplicate", epc });
+  }
+
+  const nama = getUserName(epc);
+  if (nama === "Tidak dikenal") {
+    console.log(`⚠️  Tag tidak terdaftar: ${epc}`);
+    return res.json({ status: "unknown", epc });
+  }
+
+  tagTerdeteksi.add(epc);
+  console.log(`📡 ESP32 => ${epc} => ${nama}`);
+
+  // Emit ke semua frontend yang terhubung
+  io.emit("tag", {
+    Tag: epc,
+    nama: nama,
+    waktu: new Date().toLocaleTimeString(),
+  });
+
+  res.json({ status: "ok", epc, nama });
+});
 
 // GET /api/users — ambil semua user dari Firestore
 app.get("/api/users", async (req, res) => {
