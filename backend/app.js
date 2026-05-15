@@ -37,7 +37,7 @@ io.on("connection", (socket) => {
 });
 
 const port = new SerialPort({
-  path: "COM6",
+  path: "COM3",
   baudRate: 115200,
 });
 
@@ -99,3 +99,7 @@ loadUsers().then(() => {
     console.log("Server jalan di http://localhost:3000");
   });
 });
+
+
+//node app.js
+//npm run dev -- --port 3001
