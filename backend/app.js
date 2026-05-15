@@ -15,6 +15,16 @@ const db = admin.firestore();
 const app = express();
 const server = http.createServer(app);
 
+// Middleware
+app.use(express.json());
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "http://localhost:3001");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.sendStatus(200);
+  next();
+});
+
 const io = new Server(server, {
   cors: {
     origin: "http://localhost:3001",
@@ -92,6 +102,58 @@ port.on("data", async function (data) {
 });
 
 app.use(express.static("public"));
+
+// ─── REST API ─────────────────────────────────────────────
+
+// GET /api/users — ambil semua user dari Firestore
+app.get("/api/users", async (req, res) => {
+  try {
+    const snapshot = await db.collection("users").get();
+    const users = [];
+    snapshot.forEach((doc) => users.push({ id: doc.id, ...doc.data() }));
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/users — tambah user baru
+app.post("/api/users", async (req, res) => {
+  const { Tag, nama } = req.body;
+  if (!Tag || !nama) return res.status(400).json({ error: "Tag dan nama wajib diisi" });
+
+  try {
+    // Cek apakah Tag sudah ada
+    const existing = await db.collection("users").where("Tag", "==", Tag).get();
+    if (!existing.empty) return res.status(409).json({ error: "Tag sudah terdaftar" });
+
+    const docRef = await db.collection("users").add({ Tag, nama });
+    // Update cache langsung
+    userCache.set(Tag, nama);
+    console.log(`✅ User ditambahkan: ${Tag} => ${nama}`);
+    res.status(201).json({ id: docRef.id, Tag, nama });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/users/:id — hapus user berdasarkan doc ID
+app.delete("/api/users/:id", async (req, res) => {
+  try {
+    const docRef = db.collection("users").doc(req.params.id);
+    const doc = await docRef.get();
+    if (!doc.exists) return res.status(404).json({ error: "User tidak ditemukan" });
+
+    const { Tag } = doc.data();
+    await docRef.delete();
+    // Hapus dari cache
+    userCache.delete(Tag);
+    console.log(`🗑️ User dihapus: ${Tag}`);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Load users dulu, baru start server
 loadUsers().then(() => {
